@@ -1,0 +1,66 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hublitaxi-preview",
+  "main": ".open-next/worker.js",
+  // Preview Worker only — do not add routes or custom domains here.
+  "workers_dev": true,
+  "upload_source_maps": true,
+  "compatibility_date": "2026-10-29",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "images": {
+    // Requires Cloudflare Images on the account. See README if preview
+    // image optimization fails.
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "hublitaxi-preview"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "hublitaxi-next-cache"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler"]
+    }
+  ],
+  // database_id / KV id are Cloudflare-issued. Omit them here (Wrangler 4
+  // schema allows this) so local preview can simulate bindings. Paste the
+  // real IDs after `wrangler d1 create` / `wrangler kv namespace create`
+  // before any remote upload/deploy. See README.
+  "d1_databases": [
+    {
+      "binding": "NEXT_TAG_CACHE_D1",
+      "database_name": "hublitaxi-next-tag-cache"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "REVIEWS"
+    }
+  ]
+}

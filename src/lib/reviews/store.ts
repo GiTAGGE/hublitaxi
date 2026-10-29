@@ -12,6 +12,11 @@ const FILE_PATH = path.join(process.cwd(), ".data", "reviews.json");
 type ReviewRecord = Review & { ip_hash?: string | null };
 type ReviewData = { reviews: ReviewRecord[] };
 
+type ReviewsKv = {
+  get(key: string, type: "json"): Promise<unknown>;
+  put(key: string, value: string): Promise<void>;
+};
+
 function isBuildPhase() {
   return process.env.NEXT_PHASE === "phase-production-build";
 }
@@ -59,6 +64,31 @@ async function getBlobStore() {
   }
 }
 
+/**
+ * Cloudflare KV takes precedence only when the REVIEWS binding is present.
+ * `next dev` and `next build` keep using the file store so Netlify production
+ * and local file-based workflows stay unchanged.
+ */
+async function getReviewsKv(): Promise<ReviewsKv | undefined> {
+  if (isBuildPhase() || isLocalDev()) return undefined;
+
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    return env.REVIEWS;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseReviewData(data: unknown): ReviewData {
+  if (data && typeof data === "object" && "reviews" in data) {
+    const reviews = (data as ReviewData).reviews;
+    if (Array.isArray(reviews)) return { reviews };
+  }
+  return { reviews: [] };
+}
+
 function toPublicReview(row: ReviewRecord): PublicReview {
   return {
     id: row.id,
@@ -88,10 +118,7 @@ async function writeFileStore(data: ReviewData): Promise<void> {
 async function readBlobStore(): Promise<ReviewData> {
   const store = await getBlobStore();
   const data = await store.get(BLOB_KEY, { type: "json" });
-  if (data && typeof data === "object" && "reviews" in data) {
-    return data as ReviewData;
-  }
-  return { reviews: [] };
+  return parseReviewData(data);
 }
 
 async function writeBlobStore(data: ReviewData): Promise<void> {
@@ -99,7 +126,25 @@ async function writeBlobStore(data: ReviewData): Promise<void> {
   await store.setJSON(BLOB_KEY, data);
 }
 
+async function readKvStore(kv: ReviewsKv): Promise<ReviewData> {
+  const data = await kv.get(BLOB_KEY, "json");
+  return parseReviewData(data);
+}
+
+async function writeKvStore(kv: ReviewsKv, data: ReviewData): Promise<void> {
+  await kv.put(BLOB_KEY, JSON.stringify(data));
+}
+
 async function readStore(): Promise<ReviewData> {
+  const kv = await getReviewsKv();
+  if (kv) {
+    try {
+      return await readKvStore(kv);
+    } catch {
+      return { reviews: [] };
+    }
+  }
+
   if (shouldUseBlobs()) {
     try {
       return await readBlobStore();
@@ -112,6 +157,12 @@ async function readStore(): Promise<ReviewData> {
 }
 
 async function writeStore(data: ReviewData): Promise<void> {
+  const kv = await getReviewsKv();
+  if (kv) {
+    await writeKvStore(kv, data);
+    return;
+  }
+
   if (shouldUseBlobs()) {
     await writeBlobStore(data);
     return;

@@ -9,18 +9,19 @@ Live domain: [hublitaxi.com](https://hublitaxi.com) (deployed on Netlify).
 - **Next.js 15** (App Router, Server Components, static generation)
 - **TypeScript**
 - **Tailwind CSS 3**
-- JSON content layer + moderated customer reviews (Netlify Blobs — no database)
+- JSON content layer + moderated customer reviews (Netlify Blobs in production today; Cloudflare KV when the `REVIEWS` binding is present)
 - SEO: dynamic `sitemap.xml`, `robots.txt`, Open Graph + JSON-LD (`TaxiService`, `FAQPage`, `Service`)
-- Deployed on **Netlify** via `@netlify/plugin-nextjs`
+- Production is **Netlify** via `@netlify/plugin-nextjs`. A parallel **Cloudflare Workers** preview (OpenNext) is configured in-repo and is **not** connected to `hublitaxi.com` yet.
 
 ## Getting started
 
 ```bash
 npm install      # install dependencies
-npm run dev      # start dev server at http://localhost:3000
+npm run dev      # start Next.js dev server at http://localhost:3000
 npm run lint     # run ESLint
-npm run build    # production build (prerenders all pages)
-npm run start    # serve the production build
+npm run build    # production Next.js build (prerenders all pages)
+npm run start    # serve the Next.js production build
+npm run preview  # OpenNext build + local Workers runtime (workerd)
 ```
 
 Requires Node.js 20+ (see `.nvmrc`).
@@ -74,12 +75,14 @@ Social share preview: replace **`public/images/og.jpg`** (1200×630) or update
 
 ## Customer reviews (no database)
 
-**No Supabase or external database.** Reviews are stored in **Netlify Blobs**
-(included with your free Netlify plan).
+**No Supabase or external database.** Review JSON is stored in **Netlify Blobs**
+on the current production site. On Cloudflare Workers, the same document is stored
+in **Workers KV** when the `REVIEWS` binding exists. `npm run dev` still uses
+`.data/reviews.json`.
 
 | Layer | What it does |
 | ----- | ------------ |
-| **Storage** | Netlify Blobs on production (`.data/reviews.json` locally in dev) |
+| **Storage** | Cloudflare KV (Worker, when bound) → Netlify Blobs (production) → `.data/reviews.json` (`next dev`) |
 | **Moderation** | Submissions stay `pending` until you approve at `/admin/reviews` |
 | **Turnstile** | Cloudflare CAPTCHA blocks bots (required in production) |
 | **Honeypot** | Hidden field catches automated spam |
@@ -146,3 +149,111 @@ This site uses **gtag directly** (simpler, fewer moving parts). Use [Google Tag 
 The repo includes `netlify.toml`. On Netlify, connect this GitHub repository and deploy —
 the build command is `next build` and the Next.js runtime plugin handles the rest.
 Add review env vars in the Netlify dashboard before enabling the review form in production.
+
+Production DNS for `hublitaxi.com` stays on Netlify until a Cloudflare preview is
+verified. Do not run `npm run deploy` against this Worker until that cutover is
+explicitly approved.
+
+## Cloudflare Workers preview (OpenNext)
+
+This app stays on **Next.js 15** (not 16, not vinext). `@opennextjs/cloudflare@1.20.14`
+declares a peer of `next@>=15.5.28 <16`, so the previously locked 15.5.19 patch
+was bumped to **15.5.28** to satisfy the adapter. Wrangler has **no custom domain
+or route** — the Worker name is `hublitaxi-preview` and `workers_dev` is enabled.
+
+### Local OpenNext commands
+
+```bash
+cp .dev.vars.example .dev.vars    # NEXTJS_ENV=development only; never commit secrets
+npm run build                     # same Next.js build Netlify uses
+npm run preview                   # opennextjs-cloudflare build && preview (workerd)
+npm run cf-typegen                # optional: regenerate cloudflare-env.d.ts
+```
+
+`npm run upload` / `npm run deploy` talk to Cloudflare. Do not run them until a
+preview deployment is approved. If you do deploy later, use `--keep-vars` (already
+in those scripts) so dashboard secrets are not wiped.
+
+### Create Cloudflare resources (once, in your account)
+
+Resource **IDs** cannot be committed until Wrangler prints them. Binding **names**
+in `wrangler.jsonc` are already set to the official OpenNext names.
+
+```bash
+npx wrangler login
+
+# R2 — incremental cache for ISR (`revalidate = 60` on / and /reviews)
+npx wrangler r2 bucket create hublitaxi-next-cache
+
+# D1 — tag cache for revalidatePath after review approval
+npx wrangler d1 create hublitaxi-next-tag-cache
+# Paste database_id into wrangler.jsonc → d1_databases[0].database_id
+# (omitted in-repo because IDs are account-specific)
+
+# KV — customer reviews document (key: all-reviews)
+npx wrangler kv namespace create REVIEWS
+# Paste id into wrangler.jsonc → kv_namespaces[0].id
+```
+
+Durable Object class `DOQueueHandler` is provided by the OpenNext Worker build;
+the `v1` migration in `wrangler.jsonc` registers it. No extra create command.
+
+`npm run preview` / `upload` / `deploy` run OpenNext `populateCache`, which
+creates the D1 `revalidations` table. The statement the adapter `@opennextjs/cloudflare@1.20.14`
+uses (if you need to run it by hand):
+
+```bash
+npx wrangler d1 execute NEXT_TAG_CACHE_D1 --command "CREATE TABLE IF NOT EXISTS revalidations (tag TEXT NOT NULL, revalidatedAt INTEGER NOT NULL, stale INTEGER, expire INTEGER default NULL, UNIQUE(tag) ON CONFLICT REPLACE);"
+```
+
+### Cloudflare environment variables
+
+Set these in the Worker **Settings → Variables and Secrets** (and in **Build
+variables** too if you later use Workers Builds). Do not put values in git.
+
+| Variable | Runtime | Build | Secret |
+| -------- | ------- | ----- | ------ |
+| `ADMIN_REVIEW_PASSWORD` | yes | no | yes |
+| `ADMIN_SESSION_SECRET` | yes | no | yes |
+| `IP_HASH_SALT` | yes | no | yes |
+| `TURNSTILE_SECRET_KEY` | yes | no | yes |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | yes | yes | no |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | yes | yes | no |
+| `NETLIFY_SITE_ID` / `NETLIFY_AUTH_TOKEN` | only if you still need Blobs from a Worker | no | yes |
+
+Reviews on the preview Worker should use KV, so Netlify Blobs tokens are **not**
+required there. Do not point preview at production Blobs unless you intend to
+share that data.
+
+Turnstile: add the `*.workers.dev` preview hostname in the Turnstile widget
+allowed hostnames **before** testing the review form on Cloudflare.
+
+### Bindings already named in `wrangler.jsonc`
+
+| Binding | Resource | Purpose |
+| ------- | -------- | ------- |
+| `ASSETS` | OpenNext static assets | Required |
+| `WORKER_SELF_REFERENCE` | this Worker (`hublitaxi-preview`) | ISR / revalidation |
+| `NEXT_INC_CACHE_R2_BUCKET` | R2 `hublitaxi-next-cache` | ISR incremental cache |
+| `NEXT_CACHE_DO_QUEUE` | Durable Object `DOQueueHandler` | Time-based revalidate queue |
+| `NEXT_TAG_CACHE_D1` | D1 `hublitaxi-next-tag-cache` | `revalidatePath` |
+| `REVIEWS` | KV namespace | Review JSON |
+| `IMAGES` | Cloudflare Images | `next/image` |
+
+**Not configured (needs a custom domain / zone):** OpenNext cache purge
+(`CACHE_PURGE_API_TOKEN`, `CACHE_PURGE_ZONE_ID`). Skip until `hublitaxi.com` is
+on Cloudflare. Until then, ISR still refreshes on the 60s window; on-demand
+`revalidatePath` uses D1 but will not purge a zone cache.
+
+**Images:** the `IMAGES` binding is the official OpenNext hook. It can incur
+[Cloudflare Images](https://developers.cloudflare.com/images/pricing/) charges.
+If the account does not have Images, remove the `images` block from
+`wrangler.jsonc` and set `images.unoptimized: true` in `next.config.mjs` for
+preview only.
+
+### Testing a workers.dev URL (after a later approved deploy)
+
+1. Keep https://hublitaxi.com on Netlify.
+2. Open `https://hublitaxi-preview.<subdomain>.workers.dev`.
+3. Canonical tags and `sitemap.xml` still use `https://hublitaxi.com`.
+4. Do not attach a custom domain in Wrangler or the dashboard until cutover.

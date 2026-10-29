@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local OpenNext/Wrangler preview (do not commit .dev.vars).
+# Selects the Next.js ".env*" file environment. Defaults to production if unset.
+NEXTJS_ENV=development
