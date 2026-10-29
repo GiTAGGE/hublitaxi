@@ -16,9 +16,11 @@ host, or Cloudflare KV when the Worker `REVIEWS` binding is present — see READ
   Netlify production uses Netlify Blobs. Cloudflare Workers preview uses KV when
   `REVIEWS` is bound. Turnstile required for production submissions. Admin needs
   `ADMIN_REVIEW_PASSWORD` + `ADMIN_SESSION_SECRET`.
-- **Cloudflare preview.** `npm run preview` runs OpenNext + workerd. Do not run
-  `npm run deploy` / `npm run upload`, change DNS, or attach `hublitaxi.com`
-  unless the user explicitly asks. Keep `netlify.toml` and `@netlify/blobs`.
+- **Cloudflare production.** `hublitaxi.com` and `www.hublitaxi.com` are Custom
+  Domains on Worker `hublitaxi-preview`. `npm run preview` is local workerd.
+  Keep `netlify.toml` and `@netlify/blobs` until Netlify is explicitly removed.
+  Do not delete the Netlify site or change GoDaddy nameservers away from
+  Cloudflare unless the user asks.
 - **Business config lives in `src/data/site.ts`.** The phone/WhatsApp numbers
   there are placeholders. The booking form, click-to-call buttons and JSON-LD
   all read from this file, so update it (not individual components) when wiring

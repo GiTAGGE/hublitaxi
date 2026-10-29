@@ -2,8 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "hublitaxi-preview",
   "main": ".open-next/worker.js",
-  // Preview Worker only — do not add routes or custom domains here.
+  // workers.dev kept as rollback. Production traffic uses Custom Domains.
   "workers_dev": true,
+  "routes": [
+    { "pattern": "hublitaxi.com", "custom_domain": true },
+    { "pattern": "www.hublitaxi.com", "custom_domain": true }
+  ],
   "upload_source_maps": true,
   "compatibility_date": "2026-10-29",
   "compatibility_flags": [
