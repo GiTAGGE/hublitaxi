@@ -28,6 +28,8 @@
       "service": "hublitaxi-preview"
     }
   ],
+  // Bucket name is fixed; create it after R2 is enabled on the account
+  // (Dashboard → R2). Local preview can simulate R2 without the remote bucket.
   "r2_buckets": [
     {
       "binding": "NEXT_INC_CACHE_R2_BUCKET",
@@ -48,19 +50,17 @@
       "new_sqlite_classes": ["DOQueueHandler"]
     }
   ],
-  // database_id / KV id are Cloudflare-issued. Omit them here (Wrangler 4
-  // schema allows this) so local preview can simulate bindings. Paste the
-  // real IDs after `wrangler d1 create` / `wrangler kv namespace create`
-  // before any remote upload/deploy. See README.
   "d1_databases": [
     {
       "binding": "NEXT_TAG_CACHE_D1",
-      "database_name": "hublitaxi-next-tag-cache"
+      "database_name": "hublitaxi-next-tag-cache",
+      "database_id": "1f7a5af8-dfe6-4c2c-972f-f38e96554c85"
     }
   ],
   "kv_namespaces": [
     {
-      "binding": "REVIEWS"
+      "binding": "REVIEWS",
+      "id": "4e9dd3d3ce8e4e56bd6a43b9f138c474"
     }
   ]
 }
