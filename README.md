@@ -2,7 +2,7 @@
 
 Marketing & lead-generation website for **Hubli Taxi** — a local, airport, railway and outstation cab service for Hubli–Dharwad. Built for speed, SEO and high conversion.
 
-Live domain: [hublitaxi.com](https://hublitaxi.com) (deployed on Netlify).
+Live domain: [hublitaxi.com](https://hublitaxi.com) (Cloudflare Workers via OpenNext).
 
 ## Tech stack
 
@@ -11,7 +11,7 @@ Live domain: [hublitaxi.com](https://hublitaxi.com) (deployed on Netlify).
 - **Tailwind CSS 3**
 - JSON content layer + moderated customer reviews (Netlify Blobs in production today; Cloudflare KV when the `REVIEWS` binding is present)
 - SEO: dynamic `sitemap.xml`, `robots.txt`, Open Graph + JSON-LD (`TaxiService`, `FAQPage`, `Service`)
-- Production is **Netlify** via `@netlify/plugin-nextjs`. A parallel **Cloudflare Workers** preview (OpenNext) is configured in-repo and is **not** connected to `hublitaxi.com` yet.
+- Production is **Cloudflare Workers** via OpenNext (`hublitaxi-preview`). **Netlify** remains configured as a rollback (`netlify.toml`, `@netlify/blobs`) until it is explicitly removed.
 
 ## Getting started
 
@@ -150,16 +150,17 @@ The repo includes `netlify.toml`. On Netlify, connect this GitHub repository and
 the build command is `next build` and the Next.js runtime plugin handles the rest.
 Add review env vars in the Netlify dashboard before enabling the review form in production.
 
-Production DNS for `hublitaxi.com` stays on Netlify until a Cloudflare preview is
-verified. Do not run `npm run deploy` against this Worker until that cutover is
-explicitly approved.
+Production DNS for `hublitaxi.com` is on Cloudflare (`arushi` / `gerald` NS).
+The Worker Custom Domains are `hublitaxi.com` and `www.hublitaxi.com`. Keep the
+Netlify site until rollback is no longer needed.
 
-## Cloudflare Workers preview (OpenNext)
+## Cloudflare Workers (OpenNext)
 
 This app stays on **Next.js 15** (not 16, not vinext). `@opennextjs/cloudflare@1.20.14`
 declares a peer of `next@>=15.5.28 <16`, so the previously locked 15.5.19 patch
-was bumped to **15.5.28** to satisfy the adapter. Wrangler has **no custom domain
-or route** — the Worker name is `hublitaxi-preview` and `workers_dev` is enabled.
+was bumped to **15.5.28** to satisfy the adapter. Worker name is `hublitaxi-preview`.
+Custom Domains: `hublitaxi.com` and `www.hublitaxi.com`. `workers_dev` stays on
+as a rollback URL.
 
 ### Local OpenNext commands
 
@@ -225,8 +226,8 @@ Reviews on the preview Worker should use KV, so Netlify Blobs tokens are **not**
 required there. Do not point preview at production Blobs unless you intend to
 share that data.
 
-Turnstile: add the `*.workers.dev` preview hostname in the Turnstile widget
-allowed hostnames **before** testing the review form on Cloudflare.
+Turnstile: allow `hublitaxi.com`, `www.hublitaxi.com`, and
+`hublitaxi-preview.hublitaxi.workers.dev` on the widget.
 
 ### Bindings already named in `wrangler.jsonc`
 
@@ -240,10 +241,9 @@ allowed hostnames **before** testing the review form on Cloudflare.
 | `REVIEWS` | KV namespace | Review JSON |
 | `IMAGES` | Cloudflare Images | `next/image` |
 
-**Not configured (needs a custom domain / zone):** OpenNext cache purge
-(`CACHE_PURGE_API_TOKEN`, `CACHE_PURGE_ZONE_ID`). Skip until `hublitaxi.com` is
-on Cloudflare. Until then, ISR still refreshes on the 60s window; on-demand
-`revalidatePath` uses D1 but will not purge a zone cache.
+**Optional after cutover:** OpenNext cache purge (`CACHE_PURGE_API_TOKEN`,
+`CACHE_PURGE_ZONE_ID` for zone `hublitaxi.com`). ISR still refreshes on the 60s
+window without it; on-demand `revalidatePath` uses D1.
 
 **Images:** the `IMAGES` binding is the official OpenNext hook. It can incur
 [Cloudflare Images](https://developers.cloudflare.com/images/pricing/) charges.
@@ -251,9 +251,7 @@ If the account does not have Images, remove the `images` block from
 `wrangler.jsonc` and set `images.unoptimized: true` in `next.config.mjs` for
 preview only.
 
-### Testing a workers.dev URL (after a later approved deploy)
+### Rollback URL
 
-1. Keep https://hublitaxi.com on Netlify.
-2. Open `https://hublitaxi-preview.<subdomain>.workers.dev`.
-3. Canonical tags and `sitemap.xml` still use `https://hublitaxi.com`.
-4. Do not attach a custom domain in Wrangler or the dashboard until cutover.
+`https://hublitaxi-preview.hublitaxi.workers.dev` stays available. Canonical
+tags and `sitemap.xml` use `https://hublitaxi.com`.
