@@ -28,8 +28,7 @@
       "service": "hublitaxi-preview"
     }
   ],
-  // Bucket name is fixed; create it after R2 is enabled on the account
-  // (Dashboard → R2). Local preview can simulate R2 without the remote bucket.
+  // Remote bucket hublitaxi-next-cache exists. Binding name is required by OpenNext.
   "r2_buckets": [
     {
       "binding": "NEXT_INC_CACHE_R2_BUCKET",
