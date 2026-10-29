@@ -1,4 +1,4 @@
-/** Reviews use Netlify Blobs on production (no external database). */
+/** Reviews use Cloudflare KV when bound, otherwise Netlify Blobs (no external database). */
 export function isReviewsEnabled() {
   return true;
 }

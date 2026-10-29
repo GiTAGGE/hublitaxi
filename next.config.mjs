@@ -7,3 +7,9 @@ const nextConfig = {
 };
 
 export default nextConfig;
+
+// Local `next dev` only — skipped during `next build` (Netlify and OpenNext).
+if (process.env.NODE_ENV === "development") {
+  const { initOpenNextCloudflareForDev } = await import("@opennextjs/cloudflare");
+  initOpenNextCloudflareForDev();
+}

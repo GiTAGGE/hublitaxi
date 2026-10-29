@@ -22,6 +22,7 @@ yarn-error.log*
 # env files
 .env*.local
 .env
+.dev.vars
 
 # typescript
 *.tsbuildinfo
@@ -29,6 +30,10 @@ next-env.d.ts
 
 # netlify
 .netlify
+
+# cloudflare / opennext (local build + wrangler state)
+.open-next
+.wrangler
 
 # local review store (dev only; production uses Netlify Blobs)
 .data/

@@ -10,6 +10,9 @@ export function hashClientIp(ip: string): string | null {
 }
 
 export function getClientIp(request: Request): string | undefined {
+  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfConnectingIp) return cfConnectingIp;
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0]?.trim();
   return request.headers.get("x-real-ip") ?? undefined;
